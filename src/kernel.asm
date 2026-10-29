@@ -169,9 +169,9 @@ modo_protegido:
     ; COMPLETAR - Probar Sys_call (para etapas posteriores, comentar este código)
     ; COMPLETAR - Probar generar una excepción (para etapas posteriores, comentar este código)
     
-    ; ========================
+    ; =========================
     ; ||  (Parte 4: Tareas)  ||
-    ; ========================
+    ; =========================
     
     ; COMPLETAR - Inicializar el directorio de paginas de la tarea de prueba
     ;mov eax, 0x18000

@@ -14,9 +14,11 @@ BITS 32
 sched_task_offset:     dd 0xFFFFFFFF
 sched_task_selector:   dw 0xFFFF
 
+;; Procesar Tecla (Parte 2: Interrupciones)
+extern process_scancode
+
 ;; PIC
 extern pic_finish1
-extern process_scancode
 
 ;; Sched
 extern sched_next_task

@@ -12,7 +12,6 @@
 #include "screen.h"
 
 idt_entry_t idt[256] = {0};
-
 idt_descriptor_t IDT_DESC = {sizeof(idt) - 1, (uint32_t)&idt};
 
 /* Dada una expresion que resulta en un numero de 32 bits construye una que solo incluye sus 16bits menos significativos */

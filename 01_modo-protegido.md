@@ -18,17 +18,17 @@ No es posible en x86 anular la unidad de segmentación. Por lo tanto, tenemos qu
 A continuación les pasamos la lista de archivos que forman parte del
 taller de hoy junto con su descripción:
 
-- `Makefile` - encargado de compilar y generar la imagen del floppy disk.
-- `diskette.img.bz2` - la imagen del floppy que contiene el boot-sector preparado para cargar el kernel.
-- `kernel.asm` - esquema básico del código para el kernel.
-- `defines.h, colors.h` - constantes y definiciones.
-- `gdt.h, gdt.c` - definición de la tabla de descriptores globales.
-- `screen.h, screen.c` - rutinas para pintar la pantalla.
-- `a20.asm` - rutinas para habilitar y deshabilitar A20.
-- `print.mac` - macros útiles para imprimir por pantalla y transformar valores.
-- `kassert.h` - rutinas para garantizar invariantes en el kernel.
-- `i386.h` - funciones auxiliares para utilizar assembly desde C.
-- `types.h` - declaración de tipos comunes en el kernel.
+-   `Makefile` - encargado de compilar y generar la imagen del floppy disk.
+-   `diskette.img.bz2` - la imagen del floppy que contiene el boot-sector preparado para cargar el kernel.
+-   `kernel.asm` - esquema básico del código para el kernel.
+-   `defines.h, colors.h` - constantes y definiciones.
+-   `gdt.h, gdt.c` - definición de la tabla de descriptores globales.
+-   `screen.h, screen.c` - rutinas para pintar la pantalla.
+-   `a20.asm` - rutinas para habilitar y deshabilitar A20.
+-   `print.mac` - macros útiles para imprimir por pantalla y transformar valores.
+-   `kassert.h` - rutinas para garantizar invariantes en el kernel.
+-   `i386.h` - funciones auxiliares para utilizar assembly desde C.
+-   `types.h` - declaración de tipos comunes en el kernel.
 
 Los ejercicios que vamos a realizar hoy les van a pedir interpretar código de estos archivos y escribir código únicamente en los archivos `kernel.asm`, `defines.h`, `screen.c` y `gdt.c`.
 
@@ -42,12 +42,11 @@ Por una serie de razones técnicas, el modelo de memoria segmentada no suele uti
 
 ### Primera parte: Definiendo la GDT
 
-Las preguntas a continuación las pueden responder inline o en otro archivo markdown. ¡Nada de pdfs o docx por favor!
+Las preguntas que encuentren a lo largo de este trabajo son para guiarlos en el estudio y la resolución, alentamos a que se tomen en serio la tarea de responderlas ya que contienen conceptos clave necesarios para la comprensión del sistema en su conjunto. Tengan en cuenta que cualquiera de estas preguntas, y otras, pueden formar parte del quiz de entrega del TP.
 
 1. Explorando el manual Intel *Volumen 3: System Programming. Sección 2.2 Modes of Operation*. ¿A qué nos referimos con modo real y con modo protegido en un procesador Intel? ¿Qué particularidades tiene cada modo?
 
 - **Modo real:** Provee el ambiente de desarrollo del procesador Intel 8086 y la posibilidad de cambiar a modo protegido, soporta 1 MB de direccionamiento fisico, la base de un segmento es especificada con un selector de segmento de 16 bits, el cual es shifteado a izquierda 4 bits para obtener un offset de 20 bits de la dirección 0. Luego se suma el offset de 16 bits a la base del segmento para obtener la dirección física, todos los operandos son de 8 o 16 bits, tenemos 8 registros de propósito general: AX, BX, CX, DX, SP, BP, SI, y DI, 4 registros de segmento: CS para código, DS y ES para datos, y SS para la pila. No hay protección de memoria ni niveles de privilegio.
-
 - **Modo protegido:** Modo nativo del procesador, provee flexibilidad, alto rendimiento y retrocompatibilidad con la base de software existente. Puede direccionar hasta 4GB de memoria, tiene 4 niveles de protección y sus instrucciones dependen del nivel de privilegio.
 
 2. Comenten en su equipo, ¿Por qué debemos hacer el pasaje de modo real a modo protegido? ¿No podríamos simplemente tener un sistema operativo en modo real? ¿Qué desventajas tendría?
@@ -59,7 +58,6 @@ Anteriormente, detallamos que la memoria es un arreglo continuo de bytes y que p
 3. Busquen el manual *volumen 3 de Intel en la sección 3.4.5 Segment Descriptors*. ¿Qué es la GDT? ¿Cómo es el formato de un descriptor de segmento, bit a bit? Expliquen brevemente para qué sirven los campos *Limit*, *Base*, *G*, *P*, *DPL*, *S*. También pueden referirse a los slides de la clase teórica, aunque recomendamos que se acostumbren a consultar el manual.
 
 - La GDT (Global Descriptor Table) es una estructura con descriptores de segmento, que proveen al procesador con información de los segmentos. Formato de los descriptores de segmento:
-
   - `SEGMENT LIMIT`: Especifica el maximo offset accesible dentro del segmento, se puede interpretar diferente dependiendo del flag G (Granularity) y si es un segmento expand-up o expand-down.
   - `BASE ADDRESS`: Define el byte 0 dentro de los 4GB de direccionamiento, el procesador junta los 3 campos de base address para formar un solo valor de 32 bits.
   - `TYPE`: Indica el tipo del segmento y especifica los tipos de acceso que se le pueden realizar al semgento o la dirección de crecimiento.
@@ -70,14 +68,14 @@ Anteriormente, detallamos que la memoria es un arreglo continuo de bytes y que p
   - `G`: Cuando el flag de granularidad está en 0 el límite del segmento es interpretado en unidades de bytes, cuando G=1, el límite es interpretado como unidades de 4 KBytes.
   - `L`: Indica cuando un segmento tiene codigo de 64 bits (L=1), si el bit de long está seteado, el D/B debe estar en 0.
   - `AVL`: Disponible para uso.
-    
+
 4. La tabla de la sección 3.4.5.1 *Code- and Data-Segment Descriptor Types* del volumen 3 del manual del Intel nos permite completar el *Type*, los bits 11, 10, 9, 8. ¿Qué combinación de bits tendríamos que usar si queremos especificar un segmento para ejecución y lectura de código?
 
-- Tendríamos que usar la combinacion 1010 para Execute/Read.
+- Tendríamos que usar la combinacion 1010 para Execute/Read
 
 ![](img/resolucion-dir-logica.png)
 
-Hay dos tipos de tablas que describen segmentos a nivel global y local (GDT y LDT). La tabla LDT no se utiliza en el modelo de segmentación *flat* que estaremos utilizando. Para este taller sólo vamos a usar la Tabla de Descriptores Global (GDT). En esta tabla se definen los descriptores de segmento que le dan estructura a la memoria en el nivel de segmentación.
+Hay dos tipos de tablas que describen segmentos a nivel global y local (GDT y LDT). La tabla LDT no se utiliza en el modelo de segmentación *flat* que estaremos aplicando. Para este taller sólo vamos a usar la Tabla de Descriptores Global (GDT). En esta tabla se definen los descriptores de segmento que le dan estructura a la memoria en el nivel de segmentación.
 
 5. Inicialmente, vamos a definir los siguientes segmentos en la GDT:
 
@@ -104,7 +102,7 @@ Ahora, trabajemos con el código provisto por la cátedra. Vamos a completar la 
 7. Buscar en el Volumen 3 del manual de Intel, sección 3.4.2 *Segment Selectors* el formato de los selectores de segmento. Observar en el archivo `defines.h` las constantes con los valores de distintos selectores de segmento posibles. Completen los defines faltantes en `defines.h` y entiendan la utilidad de las macros allí definidas. 
    **USAR LAS MACROS** para definir los campos de los entries de la gdt. En lo posible, no hardcodeen los números directamente en los campos.
 
-8. En el archivo `gdt.c`, completen en el código la Tabla de Descriptores Globales (GDT) con los 4 segmentos definidos en el punto 5. (**usen, en la medida de lo posible, los defines del punto anterior**)
+8. En el archivo `gdt.c`, completen en el código la Tabla de Descriptores Globales (GDT) con los 4 segmentos definidos en el punto 5. (**usen los defines del punto anterior siempre que sea posible**)
 
 9. Ya está todo listo para cargar la GDT. Antes de eso, completen todo lo necesario en `kernel.asm` hasta "Habilitar A20" inclusive[^2]. Tengan en cuenta que las macros de impresión se encuentran definidas en `print.mac` y que para los colores hay constantes definidas en `colors.h`. Las macros reciben sus argumentos separados por comas, sin paréntesis ni nada. Por ejemplo:
 
@@ -118,7 +116,7 @@ Ahora, trabajemos con el código provisto por la cátedra. Vamos a completar la 
 
 11. Completen el archivo `kernel.asm` en la sección de cargar la GDT usando lo averiguado en el punto 8 para cargar la GDT.
 
-12. Lean la guía de Qemu+gdb. Inserten un breakpoint luego de cargar la GDT. Podemos ahora comprobar el arranque de la máquina hasta ese punto. Para eso hay que compilar con `make` e iniciar `qemu`.
+12. Lean la guía de Qemu+gdb. Inserten un breakpoint luego de cargar la GDT. Podemos ahora comprobar el arranque de la máquina hasta ese punto. Para compilar y correr el kernel, pueden usar el target de make `qemu`. Para debuguear con GDB, pueden usar el target `gdb`.
 
 ### Segunda parte: Pasaje a modo protegido
 
@@ -136,7 +134,7 @@ Para pasar a modo protegido tenemos que completar los siguientes pasos:
 
 - Cargar los selectores de segmento restantes
 
-Recomendamos que también miren como referencia, el manual *volumen 3, sección 9.9.1 "Switching to Protected Mode"*. Tengan en cuenta, que algunos de los pasos que están ahí descritos, corresponden a paginación, que no estaremos activando aún. Los pasos que nos interesan ahora son: 1,2,3,4,5 y 9
+Recomendamos que también miren como referencia, el manual *volumen 3, sección 12.9.1 "Switching to Protected Mode"*. Tengan en cuenta, que algunos de los pasos que están ahí descritos, corresponden a paginación, que no estaremos activando aún. Los pasos que nos interesan ahora son: 1,2,3,4,5 y 9
 
 Ya hemos hecho los primeros, deshabilitar interrupciones y completar la GDT. También ya cargamos el registro GDTR correctamente. Ahora deberíamos, habilitar el modo protegido, hacer el *jmp far* y cargar los registros selectores de segmento.
 
@@ -148,7 +146,7 @@ Ya hemos hecho los primeros, deshabilitar interrupciones y completar la GDT. Tam
 
 15. Notemos que a continuación debe hacerse un jump far para posicionarse en el código de modo protegido. Miren el volumen 2 de Intel para ver los distintos tipos de JMPs disponibles y piensen cuál sería el formato adecuado. ¿Qué usarían como selector de segmento?
 
-- Como selector de segmento usamos `CS_RING_0_SEL`, correspondiente al segmento de codigo de kernel.
+- Como selector de segmento uso `CS_RING_0_SEL`, correspondiente al segmento de codigo de kernel.
 
 16. Dentro del modo protegido, vamos a cargar los registros selectores de segmento (`DS`, `ES`, `GS`, `FS` y `SS`). Todos se van a iniciar en el segmento de datos de nivel 0. Para esto, completar el archivo `kernel.asm` dentro del código que se ejecuta ya en modo protegido (etiqueta `modo_protegido`)
 
@@ -219,9 +217,9 @@ La pantalla va a ser un arreglo de 50 filas x 80 columnas. En cada posición del
 
 23. Escriban una rutina `screen_draw_layout` que se encargue de limpiar la pantalla y escribir el nombre de los integrantes del grupo (o lo que deseen) en la misma en el archivo `screen.c` y llamen a dicho método desde `kernel.asm`. Pueden usar diferentes fondos, colores e incorporar dibujos si así lo quisieran.
 
-24. Resumen final, discutan en el grupo qué pasos tuvieron que hacer para activar el procesador en modo protegido. Repasen todo el código que estuvieron completando y traten de comprenderlo en detalle ¿Qué cosas les parecieron más interesantes?
+24. Resumen final, discutan con compañeros qué pasos tuvieron que hacer para activar el procesador en modo protegido. Repasen todo el código que estuvieron completando y traten de comprenderlo en detalle ¿Qué cosas les parecieron más interesantes? Seguro encontrarán partes que no comprenden del todo, no duden en consultar a los docentes.
 
-> **Nota:** Si bien el código que están escribiendo es muy simple, es importante que lo hagan con cuidado y que se aseguren de que cada paso esté funcionando correctamente antes de pasar al siguiente. Si tienen dudas, no duden en consultar a los docentes.
+> **Nota:** Si bien el código que están escribiendo es muy simple, es importante que lo hagan con cuidado y que se aseguren de que cada paso esté funcionando correctamente antes de pasar al siguiente. Todo tiene un propósito comprensible y relevante al funcionamiento del sistema.
 
 ### Sobre el A20
 

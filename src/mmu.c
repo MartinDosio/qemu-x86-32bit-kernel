@@ -47,8 +47,7 @@ static inline void zero_page(paddr_t addr) {
 void mmu_init(void) {}
 
 /**
- * mmu_next_free_kernel_page devuelve la dirección física de la próxima página de kernel disponible. 
- * Las páginas se obtienen en forma incremental, siendo la primera: next_free_kernel_page
+ * mmu_next_free_kernel_page devuelve la dirección física de la próxima página de kernel disponible. Las páginas se obtienen en forma incremental, siendo la primera: next_free_kernel_page
  * @return devuelve la dirección de memoria de comienzo de la próxima página libre de kernel
  */
 paddr_t mmu_next_free_kernel_page(void) {
@@ -111,6 +110,8 @@ void mmu_map_page(uint32_t cr3, vaddr_t virt, paddr_t phy, uint32_t attrs) {
         pd[pd_index].pt = nueva_pt_paddr >> 12;
         pd[pd_index].attrs = attrs | MMU_P;
     }
+
+    pd[pd_index].attrs |= (attrs & (MMU_U | MMU_W));
     
     // Obtengo el puntero a la tabla de paginas y la mapeo
     pt_entry_t* pt = (pt_entry_t*)MMU_ENTRY_PADDR(pd[pd_index].pt);
@@ -184,35 +185,33 @@ paddr_t mmu_init_task_dir(paddr_t phy_start) {
     paddr_t task_pd_paddr = mmu_next_free_kernel_page();
     zero_page(task_pd_paddr);
 
-    // Identity Mapping de los primeros 4MB del kernel
-    for (size_t i = 0; i < identity_mapping_end; i += PAGE_SIZE) {
-        mmu_map_page(task_pd_paddr, i, i, MMU_P | MMU_W);
-    }
+    // Identity Mapping de los primeros 4MB del kernel compartiendo la tabla de paginas
+    pd_entry_t* task_pd = (pd_entry_t*)task_pd_paddr;
+    task_pd[0] = kpd[0];
 
-    // Mapeo las paginas de codigo de la tarea
+    // Mapeo las paginas de codigo de la tarea (solo lectura nivel usuario)
     for (size_t i = 0; i < TASK_CODE_PAGES; i++) {
-        mmu_map_page(task_pd_paddr, TASK_CODE_VIRTUAL + (i*PAGE_SIZE), phy_start + (i*PAGE_SIZE), MMU_P | MMU_W | MMU_U);
+        mmu_map_page(task_pd_paddr, TASK_CODE_VIRTUAL + (i * PAGE_SIZE), phy_start + (i * PAGE_SIZE), MMU_U);
     }
 
-    // Mapeo la pagina de pila
-    mmu_map_page(task_pd_paddr, TASK_STACK_BASE - PAGE_SIZE, mmu_next_free_user_page(), MMU_P | MMU_U | MMU_W);
+    // Mapeo la pagina de pila (lectura-escritura nivel usuario)
+    mmu_map_page(task_pd_paddr, TASK_STACK_BASE - PAGE_SIZE, mmu_next_free_user_page(), MMU_U | MMU_W);
 
-    // Mapeo la pagina compartida
-    mmu_map_page(task_pd_paddr, TASK_SHARED_PAGE, SHARED, MMU_P | MMU_U | MMU_W);
+    // Mapeo la pagina compartida luego del stack (solo lectura nivel usuario)
+    mmu_map_page(task_pd_paddr, TASK_SHARED_PAGE, SHARED, MMU_U);
     
     // Retorno la direccion del nuevo directorio de paginas
     return task_pd_paddr;
 }
 
-// COMPLETAR: devuelve true si se atendió el page fault y puede continuar la ejecución 
-// y false si no se pudo atender
+// COMPLETAR: devuelve true si se atendió el page fault y puede continuar la ejecución y false si no se pudo atender
 bool page_fault_handler(vaddr_t virt) {
     print("Atendiendo page fault...", 0, 0, C_FG_WHITE | C_BG_BLACK);
     // Chequeemos si el acceso fue dentro del area on-demand
     // En caso de que si, mapear la pagina
-    if ((virt >= ON_DEMAND_MEM_START_VIRTUAL) & (virt <= ON_DEMAND_MEM_END_VIRTUAL)) {
+    if ((virt >= ON_DEMAND_MEM_START_VIRTUAL) && (virt <= ON_DEMAND_MEM_END_VIRTUAL)) {
         uint32_t cr3 = rcr3();
-        mmu_map_page(cr3, virt, ON_DEMAND_MEM_START_PHYSICAL, MMU_U | MMU_W | MMU_P);
+        mmu_map_page(cr3, ON_DEMAND_MEM_START_VIRTUAL, ON_DEMAND_MEM_START_PHYSICAL, MMU_U | MMU_W);
         return true;
     }
 
