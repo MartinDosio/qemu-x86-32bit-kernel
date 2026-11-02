@@ -54,13 +54,6 @@ typedef struct str_tss {
     uint16_t iomap;
 } __attribute__((__packed__, aligned(8))) tss_t;
 
-extern tss_t tss_initial;
-extern tss_t tss_idle;
-
 void tss_init(void);
-
-extern tss_t tss_tasks[MAX_TASKS];
-tss_t tss_create_user_task(uint32_t cr3);
-gdt_entry_t tss_gdt_entry_for_task(tss_t* tss);
 
 #endif //  __TSS_H__

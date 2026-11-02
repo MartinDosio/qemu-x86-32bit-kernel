@@ -14,7 +14,9 @@
 struct keyboard_state {
 	bool _unused0;
 	bool escape;
-	bool top_row_one, top_row_two, top_row_three, top_row_four, top_row_five, top_row_six, top_row_seven, top_row_eight, top_row_nine, top_row_zero, top_row_dash, top_row_equals;
+	bool top_row_one, top_row_two, top_row_three, top_row_four,
+	     top_row_five, top_row_six, top_row_seven, top_row_eight,
+	     top_row_nine, top_row_zero, top_row_dash, top_row_equals;
 	bool backspace;
 	bool tab;
 	bool q, w, e, r, t, y, u, i, o, p;
@@ -37,7 +39,10 @@ struct keyboard_state {
 	bool f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
 	bool numlock;
 	bool scrolllock;
-	bool home, up, page_up, keypad_minus, left, keypad_5, right, keypad_plus, end, down, page_down, insert, delete;
+	bool home, up, page_up, keypad_minus,
+	     left, keypad_5, right, keypad_plus,
+	     end, down, page_down,
+	     insert, delete;
 	bool sysrq;
 	bool _unused1;
 	bool _unused2;

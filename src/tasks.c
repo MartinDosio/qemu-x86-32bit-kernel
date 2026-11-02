@@ -14,45 +14,65 @@
 #include "shared.h"
 #include "kassert.h"
 #include "types.h"
+#include "mmu.h"
 
 void tasks_screen_draw();
 
-/* Tipos de tareas soportados por el sistema */
+// Tipos de tareas soportados por el sistema
 typedef enum {
-    TASK_A = 0,
-    TASK_B = 1,
+    TASK_IDLE = 0,
+    TASK_A    = 1,
+    TASK_B    = 2,
 } tipo_e;
 
-/* Array que nos permite mapear un tipo de tarea a la dirección física de su código */
-static paddr_t task_code_start[2] = {
-    [TASK_A] = TASK_A_CODE_START,
-    [TASK_B] = TASK_B_CODE_START,
+// Array que nos permite mapear un tipo de tarea a la dirección física de su código
+static paddr_t task_code_start[] = {
+    [TASK_IDLE] = TASK_IDLE_CODE_START,
+    [TASK_A]    = TASK_A_CODE_START,
+    [TASK_B]    = TASK_B_CODE_START,
 };
 
-/* Crea una tarea en base a su tipo e indice número de tarea en la GDT */
-static int8_t create_task(tipo_e tipo) {
-    size_t gdt_id;
+task_t idle;
+task_t tasks[MAX_TASKS];
 
-    for (gdt_id = GDT_TSS_START; gdt_id < GDT_COUNT; gdt_id++) {
-            if (gdt[gdt_id].p == 0) {
+// Crea una tarea en base a su tipo e indice número de tarea en la GDT
+static int8_t create_task(tipo_e tipo) {
+    size_t task_id;
+
+    for (task_id = 0; task_id < MAX_TASKS; task_id++) {
+        if (tasks[task_id].sched_state == TASK_SLOT_FREE) {
             break;
         }
     }
 
-    kassert(gdt_id < GDT_COUNT, "No hay entradas disponibles en la GDT");
+    kassert(task_id < MAX_TASKS, "No hay entradas disponibles para crear una nueva tarea");
 
-    int8_t task_id = sched_add_task(gdt_id << 3);
-    tss_tasks[task_id] = tss_create_user_task(task_code_start[tipo]);
-    gdt[gdt_id] = tss_gdt_entry_for_task(&tss_tasks[task_id]);
+    tasks[task_id] = (task_t) {
+        .eax = 0,
+        .ebx = 0,
+        .ecx = 0,
+        .edx = 0,
+        .esi = 0,
+        .edi = 0,
+        .esp = TASK_STACK_BASE,
+        .ebp = TASK_STACK_BASE,
+        .eip = TASK_CODE_VIRTUAL,
+        .eflags = EFLAGS_IF,
+        .cr3 = mmu_init_task_dir(task_code_start[tipo]),
+        .sched_state = TASK_PAUSED,
+    };
+
     return task_id;
 }
 
-/* Inicializa el sistema de manejo de tareas */
+// Inicializa el sistema de manejo de tareas
 void tasks_init(void) {
     int8_t task_id;
-
+    
     // Dibujamos la interfaz principal
     tasks_screen_draw();
+
+    task_id = create_task(TASK_IDLE);
 
     // Creamos las tareas de tipo A
     task_id = create_task(TASK_A);
@@ -67,33 +87,39 @@ void tasks_init(void) {
     sched_enable_task(task_id);
 }
 
-/* Dibuja la pantalla de la tarea actual en su rectángulo correspondiente */
+// Dibuja la pantalla de la tarea actual en su rectángulo correspondiente.
 void tasks_syscall_draw(ca viewport[TASK_VIEWPORT_HEIGHT][TASK_VIEWPORT_WIDTH]) {
-    // La tarea nos dió un puntero para mostrar en su ventanita, antes de hacer algo estaría bueno chequear que ese puntero es efectivamente de la tarea
+    // La tarea nos dió un puntero para mostrar en su ventanita, antes de hacer
+    // algo estaría bueno chequear que ese puntero es efectivamente de la tarea
     uintptr_t viewport_addr = (uintptr_t) viewport;
     // Si el viewport empieza antes de la memoria de la tarea ignoramos la syscall
     if (viewport_addr < TASK_CODE_VIRTUAL) return;
     // Si el viewport termina después de la memoria de la tarea ignoramos la syscall
     // NOTA: `sizeof(*viewport)` nos da el tamaño del array :)
     if (TASK_SHARED_PAGE <= viewport_addr + sizeof(*viewport)) return;
+
     int8_t task_id = current_task;
-    kassert(task_id <= 3, "task_id fuera del rango valido!");
+    kassert(1 <= task_id && task_id <= 4, "task_id fuera del rango valido!");
 
     // Calculamos la posición dónde arranca la pantallita de la tarea
     uint32_t x_start, y_start;
-    if (task_id == 0) {
+
+    if (task_id == 1) {
         x_start = 1;
         y_start = 1;
     }
-    if (task_id == 1) {
+
+    if (task_id == 2) {
         x_start = 41;
         y_start = 1;
     }
-    if (task_id == 2) {
+
+    if (task_id == 3) {
         x_start = 1;
         y_start = 26;
     }
-    if (task_id == 3) {
+
+    if (task_id == 4) {
         x_start = 41;
         y_start = 26;
     }
@@ -107,7 +133,7 @@ void tasks_syscall_draw(ca viewport[TASK_VIEWPORT_HEIGHT][TASK_VIEWPORT_WIDTH]) 
     }
 }
 
-/* Actualiza la "interfaz" del sistema */
+// Actualiza la "interfaz" del sistema.
 void tasks_screen_update(void) {
     // Clock
     uint32_t ticks = ENVIRONMENT->tick_count;
@@ -120,22 +146,22 @@ void tasks_screen_update(void) {
     print("Corriendo", 70, 25, C_FG_RED  | C_BG_RED);
 
     switch (current_task) {
-        case 0: /* Tarea 1A */
-            print("Corriendo", 30,  0, C_FG_WHITE | C_BG_BLUE);
-            break;
-        case 1: /* Tarea 1B */
-            print("Corriendo", 70,  0, C_FG_WHITE | C_BG_BLUE);
-            break;
-        case 2: /* Tarea 2A */
-            print("Corriendo", 30, 25, C_FG_WHITE | C_BG_RED);
-            break;
-        case 3: /* Tarea 2B */
-            print("Corriendo", 70, 25, C_FG_WHITE | C_BG_RED);
-            break;
-        }
+    case 1: /* Tarea 1A */
+        print("Corriendo", 30,  0, C_FG_WHITE | C_BG_BLUE);
+        break;
+    case 2: /* Tarea 2A */
+        print("Corriendo", 70,  0, C_FG_WHITE | C_BG_BLUE);
+        break;
+    case 3: /* Tarea 3A */
+        print("Corriendo", 30, 25, C_FG_WHITE | C_BG_RED);
+        break;
+    case 4: /* Tarea 1B */
+        print("Corriendo", 70, 25, C_FG_WHITE | C_BG_RED);
+        break;
+    }
 }
 
-/* Dibuja los marcos y títulos iniciales de la "interfaz" del sistema */
+// Dibuja los marcos y títulos iniciales de la "interfaz" del sistema.
 void tasks_screen_draw(void) {
     // Marcos
     screen_draw_box( 0,  0, 25, 40, ' ', C_BG_BLUE);
@@ -160,13 +186,13 @@ void tasks_screen_draw(void) {
     tasks_screen_update();
 }
 
-/* Actualiza las estructuras compartidas a las tareas al ocurrir una interripción del teclado */
+// Actualiza las estructuras compartidas a las tareas al ocurrir una interripción del teclado
 void tasks_input_process(uint8_t scancode) {
     uint8_t* keyboard_state = (uint8_t*) &ENVIRONMENT->keyboard;
     keyboard_state[scancode & 0x7F] = (scancode & 0x80) == 0;
 }
 
-/* Actualiza las estructuras compartidas a las tareas al ocurrir un tick del reloj */
+// Actualiza las estructuras compartidas a las tareas al ocurrir un tick del reloj
 void tasks_tick(void) {
     ENVIRONMENT->tick_count++;
     ENVIRONMENT->task_id = current_task;

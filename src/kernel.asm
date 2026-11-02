@@ -18,7 +18,7 @@ extern IDT_DESC
 extern pic_reset
 extern pic_enable
 
-; Parte 3: Paginacion
+; Parte 3: Paginación
 extern mmu_init_kernel_dir
 extern mmu_init_task_dir
 
@@ -26,13 +26,17 @@ extern mmu_init_task_dir
 extern tss_init
 extern tasks_init
 extern sched_init
+extern switch_to_usermode
 
 ; COMPLETAR - Constantes
-%define CS_RING_0_SEL (1 << 3 | 0) ; GDT_CODE_0_SEL
-%define DS_RING_0_SEL (3 << 3 | 0) ; GDT_DATA_0_SEL
+%define CS_RING_0_SEL (1 << 3 | 0)
+%define DS_RING_0_SEL (3 << 3 | 0)
 
 %define GDT_IDX_TASK_INITIAL (11 << 3 | 0)
-%define GDT_IDX_TASK_IDLE    (12 << 3 | 0) 
+
+; Configuración del Timer PIT (Punto 14.c)
+%define PIT_DESIRED_FREQ 1000                    ; Frecuencia en Hz
+%define PIT_DIVISOR (1193182 / PIT_DESIRED_FREQ) ; Divisor de 16 bits para el puerto 0x40
 
 BITS 16
 ;; Saltear seccion de datos
@@ -85,12 +89,14 @@ start:
 
     ; COMPLETAR - Saltar a modo protegido (far jump)
     ; (recuerden que un far jmp se especifica como jmp CS_selector:address)
+    ; Pueden usar la constante CS_RING_0_SEL definida en este archivo
     jmp CS_RING_0_SEL:modo_protegido
 
 BITS 32
 modo_protegido:
     ; COMPLETAR - A partir de aca, todo el codigo se va a ejectutar en modo protegido
     ; Establecer selectores de segmentos DS, ES, GS, FS y SS en el segmento de datos de nivel 0
+    ; Pueden usar la constante DS_RING_0_SEL definida en este archivo
     mov ax, DS_RING_0_SEL
     mov ds, ax
     mov es, ax
@@ -136,11 +142,11 @@ modo_protegido:
     ; COMPLETAR - Inicializar tss
     call tss_init
 
-    ; COMPLETAR - Inicializar el scheduler
-    call sched_init
-
     ; COMPLETAR - Inicializar las tareas
     call tasks_init
+
+    ; COMPLETAR - Inicializar el scheduler
+    call sched_init
 
     ; ===================================
     ; ||   (Parte 2: Interrupciones)   ||
@@ -155,12 +161,21 @@ modo_protegido:
     call pic_reset
     call pic_enable
 
+    ; COMPLETAR (Parte 4: Tareas - Punto 14.c) - Configurar Timer PIT
+    ; Canal 0, lobyte/hibyte, Modo 2 (Rate Generator), contador binario
+    mov al, 0x34
+    out 0x43, al
+    mov al, (PIT_DIVISOR & 0xFF)         ; Divisor parte baja (LSB)
+    out 0x40, al
+    mov al, ((PIT_DIVISOR >> 8) & 0xFF)  ; Divisor parte alta (MSB)
+    out 0x40, al
+
     ; COMPLETAR - Rutinas de atención de reloj, teclado, e interrupciones 88 y 89 (en isr.asm)
-    ; COMPLETAR (Parte 4: Tareas)- Cargar tarea inicial
+    ; COMPLETAR (Parte 4: Tareas) - Cargar tarea inicial
     mov ax, GDT_IDX_TASK_INITIAL
     ltr ax
 
-    ; COMPLETAR - Habilitar interrupciones (en etapas posteriores, evaluar si se debe comentar este código)
+    ; COMPLETAR - Habilitar interrupciones (en Parte 4 las interrupciones se habilitan al saltar a Ring 3 con iret mediante el EFLAGS_IF cargado en switch_to_usermode)
     ;sti
     
     ; NOTA: Pueden chequear que las interrupciones funcionen forzando a que se dispare alguna excepción (lo más sencillo es usar la instrucción `int3`)
@@ -174,30 +189,24 @@ modo_protegido:
     ; =========================
     
     ; COMPLETAR - Inicializar el directorio de paginas de la tarea de prueba
-    ;mov eax, 0x18000
-    ;push eax
-    ;call mmu_init_task_dir
-    ;add esp, 4
+    ; mov eax, 0x18000
+    ; push eax
+    ; call mmu_init_task_dir
+    ; add esp, 4
 
     ; COMPLETAR - Cargar directorio de paginas de la tarea
-    ;mov cr3, eax
-    ;mov byte [0x07000000], 1
-    ;mov byte [0x07000000], 1
+    ; mov cr3, eax
+    ; mov byte [0x07000004], 1
+    ; mov byte [0x07000008], 1
 
     ; COMPLETAR - Restaurar directorio de paginas del kernel
-    ;mov eax, 0x25000
-    ;mov cr3, eax
-
-    ; COMPLETAR - Acelerar clock
-    mov ax, 3000 ; Menor = Mas Rapido
-    out 0x40, al
-    rol ax, 8
-    out 0x40, al
+    ; mov eax, 0x25000
+    ; mov cr3, eax
 
     ; COMPLETAR - Saltar a la primera tarea: Idle
-    jmp GDT_IDX_TASK_IDLE:0
+    call switch_to_usermode
 
-    ; Ciclar infinitamente
+    ; Ciclar infinitamente 
     mov eax, 0xFFFF
     mov ebx, 0xFFFF
     mov ecx, 0xFFFF

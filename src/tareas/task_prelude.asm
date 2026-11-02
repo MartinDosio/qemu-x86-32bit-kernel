@@ -2,6 +2,7 @@
 ; TALLER System Programming - ORGANIZACION DE COMPUTADOR II - FCEN
 ; ==============================================================================
 
+global _start
 extern task
 
 BITS 32
