@@ -30,7 +30,7 @@ A continuación les pasamos la lista de archivos que forman parte del taller de 
 - **sched.h, sched.c** - scheduler del kernel
 - **tasks.h, tasks.c** - Definición de estructuras y funciones para la administración de tareas
 - **isr.asm** - Handlers de excepciones y interrupciones (en este caso se proveen las rutinas de atención de interrupciones)
-- **task_defines.h** - Definiciones generales referente a tareas
+- **task\_defines.h** - Definiciones generales referente a tareas
 
 ## Ejercicios
 
@@ -405,25 +405,25 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   1. **Detección:** La CPU recibe una señal (IRQ del PIC), detecta una condición de error (`#PF`, `#GP`, división por cero) o ejecuta una instrucción `int n`.
   2. **Consulta a la IDT:** El vector numérico $n \in [0, 255]$ indexa la IDT para obtener el descriptor de compuerta correspondiente.
   3. **Comprobación de privilegios y cambio de pila:**
-    - Si ocurre una transición de usuario a kernel, la CPU lee el registro `TR` para acceder a la TSS.
-    - De la TSS extrae `SS0` y `ESP0` y conmuta a la pila del kernel.
-    - Apila automáticamente en la pila de Ring 0 el contexto de usuario que permitirá el retorno: `SS_user`, `ESP_user`, `EFLAGS`, `CS_user`, `EIP_user`.
-    - Si la excepción genera código de error (como `#PF` vector 14 o `#GP` vector 13), la CPU apila adicionalmente el `Error Code`.
-    - Si no hay cambio de privilegio (evento ocurrido ya en Ring 0), la CPU no conmuta de pila y apila únicamente `EFLAGS`, `CS` y `EIP` (y el error code si aplica).
+        - Si ocurre una transición de usuario a kernel, la CPU lee el registro `TR` para acceder a la TSS.
+        - De la TSS extrae `SS0` y `ESP0` y conmuta a la pila del kernel.
+        - Apila automáticamente en la pila de Ring 0 el contexto de usuario que permitirá el retorno: `SS_user`, `ESP_user`, `EFLAGS`, `CS_user`, `EIP_user`.
+        - Si la excepción genera código de error (como `#PF` vector 14 o `#GP` vector 13), la CPU apila adicionalmente el `Error Code`.
+        - Si no hay cambio de privilegio (evento ocurrido ya en Ring 0), la CPU no conmuta de pila y apila únicamente `EFLAGS`, `CS` y `EIP` (y el error code si aplica).
   4. **Ejecución del Handler:** La CPU carga en `CS:EIP` el selector y offset especificados en la compuerta de la IDT y comienza a ejecutar la ISR.
   5. **Retorno atómico (`iret`):** Desapila `EIP`, `CS` y `EFLAGS`. Al advertir que el `RPL` del `CS` desapilado es mayor que el `CPL` actual (3 > 0), desapila también `ESP` y `SS`, restaurando la pila de usuario y devolviendo el procesador al nivel de privilegio 3 de manera transparente.
 
   #### C. Paginación
   La unidad de paginación traduce una **dirección lineal** de 32 bits a una **dirección física** de memoria mediante un esquema jerárquico de dos niveles cuando `CR0.PG = 1`:
   1. La dirección lineal de 32 bits se descompone en tres campos:
-    - **Bits 31-22 (10 bits):** Índice en el *Page Directory* (PDE). Permite seleccionar una de las 1024 entradas del directorio apuntado por `CR3`.
-    - **Bits 21-12 (10 bits):** Índice en la *Page Table* (PTE). Permite seleccionar una de las 1024 entradas de la tabla apuntada por la PDE.
-    - **Bits 11-0 (12 bits):** *Offset* dentro de la página física de 4 KiB ($2^{12} = 4096$ bytes).
+        - **Bits 31-22 (10 bits):** Índice en el *Page Directory* (PDE). Permite seleccionar una de las 1024 entradas del directorio apuntado por `CR3`.
+        - **Bits 21-12 (10 bits):** Índice en la *Page Table* (PTE). Permite seleccionar una de las 1024 entradas de la tabla apuntada por la PDE.
+        - **Bits 11-0 (12 bits):** *Offset* dentro de la página física de 4 KiB ($2^{12} = 4096$ bytes).
   2. **Traducción paso a paso:**
-    - La CPU lee la base física del Page Directory desde `CR3`.
-    - Inspecciona la PDE `cr3[dir_idx]`. Si el bit `P` es 0 o se violan los permisos (`U/S` o `R/W`), la CPU aborta la instrucción, guarda la dirección lineal que falló en `CR2` y dispara la excepción `#PF` (vector 14).
-    - Si la PDE es válida, extrae la base de la Page Table y lee la PTE `page_table[table_idx]`. Nuevamente comprueba presencia y permisos.
-    - Si la PTE es válida, toma los 20 bits superiores de la PTE (dirección base del frame) y concatena los 12 bits inferiores del offset original para componer la **dirección física final**.
+        - La CPU lee la base física del Page Directory desde `CR3`.
+        - Inspecciona la PDE `cr3[dir_idx]`. Si el bit `P` es 0 o se violan los permisos (`U/S` o `R/W`), la CPU aborta la instrucción, guarda la dirección lineal que falló en `CR2` y dispara la excepción `#PF` (vector 14).
+        - Si la PDE es válida, extrae la base de la Page Table y lee la PTE `page_table[table_idx]`. Nuevamente comprueba presencia y permisos.
+        - Si la PTE es válida, toma los 20 bits superiores de la PTE (dirección base del frame) y concatena los 12 bits inferiores del offset original para componer la **dirección física final**.
   3. **Mapeo por Demanda (Page on Demand):** Permite diferir la asignación de memoria. Al acceder a una página con `P = 0`, el manejador de `#PF` (`page_fault_handler`) verifica si la dirección en `CR2` está dentro del rango previsto (`0x07000000`), asigna y mapea la página física correspondiente con `MMU_P | MMU_U | MMU_W`, purga la TLB y retorna con `iret`, permitiendo que la instrucción reintente el acceso y continúe normalmente.
 
   #### D. Tareas y Planificación (Multitarea)
@@ -432,11 +432,11 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   2. **Resguardo de contexto (`save_current_task_context`):** Al ingresar a `_isr32`, la CPU ya apiló en la pila del kernel `SS, ESP, EFLAGS, CS, EIP`. El kernel ejecuta `pushad` para apilar los registros de propósito general y vuelca todo este estado en la estructura `tasks[current_task]`.
   3. **Selección de la próxima tarea (`sched_next_task`):** El planificador evalúa las tareas en orden circular (*Round-Robin*). Selecciona la siguiente tarea cuyo estado sea `TASK_RUNNABLE` y actualiza `current_task`. Si ninguna está lista, selecciona la tarea `TASK_IDLE` (índice 0).
   4. **Restauración y cambio de contexto (`switch_to_usermode`):**
-    - Carga el `CR3` de la nueva tarea (`mov cr3, eax`), cambiando el espacio de direcciones virtuales y conmutando el aislamiento de memoria.
-    - Carga los selectores de datos de usuario (`GDT_DATA_3_SEL`) en `DS, ES, FS, GS`.
-    - Resetea la pila del kernel a `KERNEL_STACK` (`0x25000`) y construye el stack frame que simula una interrupción: empuja `SS_usr`, `ESP_usr`, `EFLAGS_usr` (con `IF = 1`), `CS_usr` y `EIP_usr`.
-    - Restaura los registros de propósito general (`eax..edi`) desde `tasks[current_task]`.
-    - Ejecuta `iret`, lo cual desapila el frame, cambia a modo usuario (CPL = 3) y reanuda la tarea en el punto exacto donde había sido interrumpida.
+        - Carga el `CR3` de la nueva tarea (`mov cr3, eax`), cambiando el espacio de direcciones virtuales y conmutando el aislamiento de memoria.
+        - Carga los selectores de datos de usuario (`GDT_DATA_3_SEL`) en `DS, ES, FS, GS`.
+        - Resetea la pila del kernel a `KERNEL_STACK` (`0x25000`) y construye el stack frame que simula una interrupción: empuja `SS_usr`, `ESP_usr`, `EFLAGS_usr` (con `IF = 1`), `CS_usr` y `EIP_usr`.
+        - Restaura los registros de propósito general desde `tasks[current_task]`.
+        - Ejecuta `iret`, lo cual desapila el frame, cambia a modo usuario (CPL = 3) y reanuda la tarea en el punto exacto donde había sido interrumpida.
 
   ### 3. Interacción entre las Estructuras del Sistema
 
@@ -448,20 +448,16 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   |  Instrucción: mov [0x08002FFC], eax                                                     |
   |                                                                                         |
   |  1. Registro de Segmento (DS / SS) -> Selector 0x23 (idx 4, RPL 3)                      |
-  |     |                                                                                   |
-  |     v                                                                                   |
   |  2. Consulta GDT (vía GDTR): Descriptor de Datos Ring 3                                 |
   |     Verifica CPL (3) <= DPL (3) y Offset < Límite. Base = 0x00000000                    |
   |     Dirección Lineal = 0x00000000 + 0x08002FFC = 0x08002FFC                             |
-  |     |                                                                                   |
-  |     v                                                                                   |
   |  3. Unidad de Paginación (MMU): Lee CR3 de la tarea actual                              |
   |     - Directorio de Páginas (kpd_task): Dir Index = bits 31-22 -> PDE                   |
   |     - Tabla de Páginas (pt_task): Table Index = bits 21-12 -> PTE                       |
   |     - Verifica P=1, U/S=1, R/W=1 -> Traduce a Dirección Física en RAM                   |
   +-----------------------------------------------------------------------------------------+
                                             |
-                          Llega Tick de Reloj (PIT -> IRQ0)
+                            Llega Tick de Reloj (PIT -> IRQ0)
                                             |
                                             v
   +-----------------------------------------------------------------------------------------+
@@ -478,7 +474,7 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
                                             |
                                             v
   +-----------------------------------------------------------------------------------------+
-  |                                RUTINA _isr32 (Kernel)                                   |
+  |                               RUTINA _isr32 (Kernel)                                    |
   |                                                                                         |
   |  6. Guarda contexto en la estructura de software:                                       |
   |     - pushad guarda registros generales en la pila de kernel                            |
@@ -505,28 +501,27 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   2. **Habilitar la línea A20 (`call A20_enable`):** Habilita el bit 21 del bus de direcciones para poder acceder linealmente por encima de 1 MiB sin experimentar *wraparound*.
   3. **Cargar la GDT (`lgdt [GDT_DESC]`):** Registra la tabla de descriptores globales con los segmentos de código y datos de Ring 0 y Ring 3, y el segmento de video.
   4. **Pasar a Modo Protegido (`CR0.PE = 1`):** Se activa el bit 0 de `CR0` mediante `mov edx, cr0`, `or edx, 1`, `mov cr0, edx`.
-  5. **Far Jump a Modo Protegido (`jmp CS_RING_0_SEL:modo_protegido`):** Fuerza a la CPU a vaciar el pipeline de instrucciones pre-decodificadas en 16 bits y recarga el registro visible y la caché oculta (*shadow register*) de `CS` con los atributos de 32 bits de `GDT_CODE_0_SEL`.
+  5. **Far Jump a Modo Protegido (`jmp CS_RING_0_SEL:modo_protegido`):** Fuerza a la CPU a vaciar el pipeline de instrucciones pre-decodificadas en 16 bits y recarga el registro visible y la caché oculta de `CS` con los atributos de 32 bits de `GDT_CODE_0_SEL`.
   6. **Inicializar selectores de datos y pila de kernel:** Cargar `DS, ES, GS, FS, SS` con `GDT_DATA_0_SEL` (`0x18`) y apuntar `ESP` y `EBP` a `KERNEL_STACK` (`0x25000`).
   7. **Inicializar paginación de kernel:**
-    - `mmu_init_kernel_dir()`: Configura `kpd` (`0x25000`) y `kpt_0` (`0x26000`), estableciendo el *Identity Mapping* de los primeros 4 MiB.
-    - Cargar `CR3` con la dirección física de `kpd` (`mov cr3, eax`).
-    - Activar el bit de paginación (`CR0.PG = 1`, bit 31).
+        - `mmu_init_kernel_dir()`: Configura `kpd` (`0x25000`) y `kpt_0` (`0x26000`), estableciendo el *Identity Mapping* de los primeros 4 MiB.
+        - Cargar `CR3` con la dirección física de `kpd` (`mov cr3, eax`).
+        - Activar el bit de paginación (`CR0.PG = 1`, bit 31).
   8. **Inicializar la TSS del sistema:**
-    - `tss_init()`: Inserta el descriptor de TSS de 32 bits en la entrada 11 de la GDT apuntando a `tss` (con `ss0 = GDT_DATA_0_SEL` y `esp0 = 0x25000`).
-    - `ltr ax`: Carga el selector `GDT_IDX_TASK_INITIAL` (`0x58`) en el registro `TR`.
+        - `tss_init()`: Inserta el descriptor de TSS de 32 bits en la entrada 11 de la GDT apuntando a `tss` (con `ss0 = GDT_DATA_0_SEL` y `esp0 = 0x25000`).
+        - `ltr ax`: Carga el selector `GDT_IDX_TASK_INITIAL` (`0x58`) en el registro `TR`.
   9. **Inicializar el entorno de tareas y scheduler:**
-    - `tasks_init()`: Dibuja la interfaz de pantalla y llama a `create_task()` para la tarea Idle y las tareas Pong y Scoreboard, inicializando sus estructuras `task_t` y asignando sus directorios de páginas con `mmu_init_task_dir()`.
-    - `sched_init()`: Inicializa el planificador estableciendo `current_task = 0`.
+        - `tasks_init()`: Dibuja la interfaz de pantalla y llama a `create_task()` para la tarea Idle y las tareas Pong y Scoreboard, inicializando sus estructuras `task_t` y asignando sus directorios de páginas con `mmu_init_task_dir()`.
+        - `sched_init()`: Inicializa el planificador estableciendo `current_task = 0`.
   10. **Inicializar la IDT y los controladores de interrupción:**
-      - `idt_init()` y `lidt [IDT_DESC]`: Carga la IDT con los descriptores de excepciones, interrupciones de PIC y syscalls.
-      - `pic_reset()` y `pic_enable()`: Remapea los PICs a las bases `0x20` y `0x28` y desenmascara las líneas IRQ0 (reloj) e IRQ1 (teclado).
-      - Configurar el temporizador PIT (puertos `0x43` y `0x40`) en Modo 2 a la frecuencia de 1000 Hz.
-  11. **Iniciar la primera tarea (`switch_to_usermode`):**
-      - Se carga el `CR3` de la tarea inicial (`Idle`), se arma el frame de retorno a Ring 3 en la pila y se ejecuta `iret` con `EFLAGS.IF = 1`, activando concurrentemente las interrupciones y la ejecución en nivel usuario.
+        - `idt_init()` y `lidt [IDT_DESC]`: Carga la IDT con los descriptores de excepciones, interrupciones de PIC y syscalls.
+        - `pic_reset()` y `pic_enable()`: Remapea los PICs a las bases `0x20` y `0x28` y desenmascara las líneas IRQ0 (reloj) e IRQ1 (teclado).
+        - Configurar el temporizador PIT (puertos `0x43` y `0x40`) en Modo 2 a la frecuencia de 1000 Hz.
+  11. **Iniciar la primera tarea (`switch_to_usermode`):** Se carga el `CR3` de la tarea inicial (`Idle`), se arma el frame de retorno a Ring 3 en la pila y se ejecuta `iret` con `EFLAGS.IF = 1`, activando concurrentemente las interrupciones y la ejecución en nivel usuario.
 
   ### 5. Niveles de Privilegio y Reglas de Acceso a las Estructuras
 
-  La arquitectura IA-32 implementa 4 anillos de privilegio concéntricos (*Rings 0 a 3*). En este sistema se utilizan dos: **Ring 0** (Supervisor / Kernel, máximo privilegio) y **Ring 3** (Usuario, mínimo privilegio).
+  La arquitectura IA-32 implementa 4 anillos de privilegio concéntricos (*Rings 0 a 3*). En este sistema se utilizan dos: **Ring 0** (Supervisor/Kernel, máximo privilegio) y **Ring 3** (Usuario, mínimo privilegio).
 
   #### A. Definiciones de Privilegio en Segmentación
   - **CPL (*Current Privilege Level*):** Nivel de privilegio del código en ejecución. Está dado por los 2 bits menos significativos del registro de segmento `CS`. Determina si la CPU ejecuta en Ring 0 o Ring 3.
@@ -534,19 +529,16 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   - **RPL (*Requested Privilege Level*):** Bits 1-0 de un selector de segmento. Permite a código privilegiado operar con permisos restringidos en representación de un llamador de menor privilegio.
 
   #### B. Reglas de Validación de Accesos
-  1. **Acceso a Segmentos de Datos:**
-    Para cargar un selector en un registro de datos (`DS, ES, FS, GS, SS`), el procesador evalúa: `max(CPL, RPL) <= DPL`
-    - Código en Ring 3 (`CPL = 3`) que intente cargar un selector con `DPL = 0` (como `GDT_DATA_0_SEL`) provoca inmediatamente una excepción de *General Protection Fault* (`#GP`, vector 13). De este modo, las tareas no pueden acceder a los datos directos del kernel ni alterar la pila de nivel 0.
+  1. **Acceso a Segmentos de Datos:** Para cargar un selector en un registro de datos (`DS, ES, FS, GS, SS`), el procesador evalúa: `max(CPL,RPL) <= DPL`. El código en Ring 3 (`CPL = 3`) que intente cargar un selector con `DPL = 0` (como `GDT_DATA_0_SEL`) provoca inmediatamente una excepción de *General Protection Fault* (`#GP`, vector 13). De este modo, las tareas no pueden acceder a los datos directos del kernel ni alterar la pila de nivel 0.
   2. **Acceso a Segmentos de Código:**
-    - La CPU no permite saltar directamente (`jmp/call`) a segmentos con distinto privilegio (`CPL != DPL` en segmentos no conformes).
-    - Para transferir el control a un nivel más privilegiado (Ring 3 a Ring 0), es **obligatorio** atravesar una compuerta (*Gate*) definida en la IDT.
+        - La CPU no permite saltar directamente (`jmp/call`) a segmentos con distinto privilegio (`CPL != DPL` en segmentos no conformes).
+        - Para transferir el control a un nivel más privilegiado (Ring 3 a Ring 0), es **obligatorio** atravesar una compuerta (*Gate*) definida en la IDT.
   3. **Acceso a Compuertas de la IDT (Interrupciones y Syscalls):**
-    - Cuando una instrucción de software `int n` intenta invocar una compuerta, el hardware verifica:
-      $$\text{CPL} \le \text{DPL de la compuerta}$$
-    - Las compuertas de excepciones y de interrupciones de hardware se configuran con `DPL = 0`. Si una tarea en Ring 3 intenta ejecutar `int 14` o `int 32`, se viola la regla ($3 \le 0$ es falso) y la CPU dispara un `#GP`.
-    - Las syscalls (`int 88` e `int 98`) se configuran con `DPL = 3`. Como $3 \le 3$, la tarea de usuario puede ejecutarlas legítimamente.
-    - Para interrupciones de hardware externas (señales físicas de los PICs) o excepciones del procesador generadas internamente por la ALU/MMU, la CPU **omite la comprobación del DPL de la compuerta**, garantizando que el kernel siempre pueda atender eventos críticos del sistema.
-    - En todos los casos, el campo `segsel` del descriptor de la compuerta apunta a `GDT_CODE_0_SEL` (`DPL = 0`), lo que provoca que al cruzar la puerta el `CPL` pase automáticamente a 0 (Ring 0).
+        - Cuando una instrucción de software `int n` intenta invocar una compuerta, el hardware verifica: `CPL <= DPL de la compuerta`
+        - Las compuertas de excepciones y de interrupciones de hardware se configuran con `DPL = 0`. Si una tarea en Ring 3 intenta ejecutar `int 14` o `int 32`, se viola la regla ($3 \le 0$ es falso) y la CPU dispara un `#GP`.
+        - Las syscalls (`int 88` e `int 98`) se configuran con `DPL = 3`. Como $3 \le 3$, la tarea de usuario puede ejecutarlas legítimamente.
+        - Para interrupciones de hardware externas (señales físicas de los PICs) o excepciones del procesador generadas internamente por la ALU/MMU, la CPU **omite la comprobación del DPL de la compuerta**, garantizando que el kernel siempre pueda atender eventos críticos del sistema.
+        - En todos los casos, el campo `segsel` del descriptor de la compuerta apunta a `GDT_CODE_0_SEL` (`DPL = 0`), lo que provoca que al cruzar la puerta el `CPL` pase automáticamente a 0 (Ring 0).
 
   #### C. Control de Acceso en Paginación
   A nivel de páginas existen dos niveles de protección regidos por el bit `U/S`:
@@ -564,11 +556,13 @@ Ahora programaremos nuestra tarea. La idea es disponer de una tarea que imprima 
   - Manipulación de registros de control: `mov cr0, reg`, `mov cr3, reg`, `invlpg`.
   - Si una tarea de Ring 3 intenta ejecutar cualquiera de estas instrucciones, el procesador cancela la instrucción y dispara un fallo de protección `#GP`.
 
+---
+
 **20.** \[Opcional\] ¿Qué pasa cuando una tarea dispara una excepción? ¿Cómo podría mejorarse la respuesta del sistema ante estos eventos?
 
 ### Comportamiento actual del sistema ante una excepción en una tarea
 
-Cuando una tarea que corre en espacio de usuario (**Ring 3**, `CPL = 3`) dispara una excepción (por ejemplo, división por cero `#DE`, fallo de protección general `#GP`, o un fallo de página `#PF` sobre una dirección no asignada ni bajo demanda):
+Cuando una tarea que corre en espacio de usuario (**Ring 3**, `CPL = 3`) dispara una excepción:
 
 1. **Intervención del hardware de la CPU:**
    - La CPU detecta la excepción y consulta la compuerta correspondiente en la IDT (vectores 0 a 19).
@@ -592,90 +586,11 @@ Cuando una tarea que corre en espacio de usuario (**Ring 3**, `CPL = 3`) dispara
      xchg bx, bx
      jmp $
      ```
-   - En el caso particular de `_isr14` (Page Fault): se invoca `page_fault_handler(cr2)`. Si la dirección lineal no pertenece al rango de memoria bajo demanda (`[0x07000000, 0x07000FFF]`), el manejador retorna `false` (`0`), provocando igualmente la llamada a `kernel_exception` seguida de `jmp $`.
-3. **Efecto final sobre el sistema:**
-   - `kernel_exception` ([idt.c](file:///home/martin/ayoc/tp-sp/src/idt.c#L249-L263)) dibuja en la pantalla la plantilla de excepción (*pantalla de la muerte* con el volcado completo de registros y tope de pila).
-   - Inmediatamente el procesador se traba en un bucle infinito `jmp $` con un breakpoint mágico de Bochs (`xchg bx, bx`).
-   - **Consecuencia:** El fallo de una sola tarea de usuario detiene y bloquea por completo todo el sistema operativo. El kernel entra en pánico y congela todas las demás tareas concurrentes sanas (por ejemplo Pong, Scoreboard e Idle), eliminando el aislamiento de fallas que debería brindar la arquitectura en modo protegido.
-
-### ¿Cómo podría mejorarse la respuesta del sistema?
-
-En un sistema operativo robusto y multitarea, el fallo de una tarea de usuario nunca debería voltear el kernel ni congelar al resto de las tareas del sistema. La respuesta ante estos eventos podría mejorarse a través de las siguientes estrategias:
-
-#### 1. Terminación Aislada de la Tarea Afectada (*Task Killing*)
-En lugar de invocar `kernel_exception` y ejecutar `jmp $` al detectar que `CS != CS_RING_0_SEL`:
-- **Identificar la tarea culpable:** A través de la variable global `current_task` del planificador.
-- **Deshabilitar la tarea en el scheduler:**
-  ```c
-  sched_disable_task(current_task); // tasks[current_task].sched_state = TASK_PAUSED (o TASK_DEAD)
-  ```
-- **Liberar los recursos de la tarea:**
-  - Liberar la página física de la pila de usuario (`0x08003000`) en el administrador de memoria física (`mmu_free_user_page`).
-  - Liberar las páginas dinámicas que haya solicitado (por ejemplo, la página bajo demanda si fue mapeada).
-  - Liberar las tablas de páginas y el directorio de páginas asignado a la tarea (`CR3`), limpiando las entradas privadas de usuario.
-- **Registrar y notificar el evento:**
-  - En lugar de sobrescribir toda la pantalla, imprimir un mensaje de error no invasivo en una consola de logs del kernel o marcar la tarea como *"Muerta / Crash"* en el Scoreboard o interfaz gráfica.
-- **Continuar con la ejecución del sistema:**
-  - Descartar el stack frame de la excepción en la pila de kernel (o resetear `ESP = KERNEL_STACK`).
-  - Invocar a `sched_next_task()` para seleccionar la siguiente tarea viva (`TASK_RUNNABLE`). Si no hay tareas vivas, se seleccionará la tarea `Idle`.
-  - Saltar inmediatamente a la nueva tarea mediante `switch_to_usermode(current_task)` o restaurar su contexto vía `iret`.
-  - **Resultado:** Las demás tareas siguen corriendo con total normalidad y el sistema se mantiene operativo y receptivo.
-
-#### 2. Reinicio Automático de la Tarea (*Task Recovery / Restart*)
-Si la tarea es un servicio persistente o de demostración (como el juego Pong):
-- En lugar de eliminarla permanentemente, el kernel puede reiniciar su estado de ejecución:
-  - Restaurar en `tasks[current_task]` su contexto inicial:
-    - `EIP = 0x08000000` (punto de entrada del código).
-    - `ESP = 0x08003000` (tope de su pila de usuario).
-    - Registros generales en 0.
-    - `EFLAGS = 0x202` (con interrupciones habilitadas `IF = 1`).
-  - Si la tarea corrompió su espacio de datos, se puede reinstanciar su directorio de páginas o recargar su código/datos.
-  - La tarea vuelve a ponerse en `TASK_RUNNABLE` y el scheduler la reanuda desde el principio.
-
-#### 3. Mecanismo de Señales a Nivel de Usuario (*User-Space Exception Handling / Signals*)
-Al estilo de los sistemas POSIX (`SIGSEGV` para `#PF`/`#GP`, `SIGFPE` para `#DE`, `SIGILL` para `#UD`):
-- Permitir que una tarea de usuario registre un manejador de excepciones personalizado mediante una syscall.
-- Si la tarea sufre una excepción y tiene un manejador configurado:
-  - El kernel construye un frame especial en la pila de usuario de la tarea con los registros al momento del fallo.
-  - El kernel modifica el `EIP` de retorno en el frame de `iret` para que apunte a dicho manejador en Ring 3.
-  - La tarea recibe el control en espacio de usuario y tiene la oportunidad de manejar el error, salvar estado o abortar de manera ordenada.
-  - Si no tiene manejador registrado o el propio manejador falla, el kernel procede a terminar la tarea (estrategia 1).
-
-#### 4. Distinción Estricta entre Excepciones de Kernel (Ring 0) y de Usuario (Ring 3)
-- **Ring 0 (`CS == CS_RING_0_SEL`):** El kernel debe entrar en pánico (`kernel_exception` + `jmp $`), ya que un fallo en modo supervisor indica corrupción crítica de estructuras internas del sistema operativo de las cuales no es seguro recuperarse automáticamente.
-- **Ring 3 (`CS != CS_RING_0_SEL`):** Solo debe afectar a la tarea que cometió la infracción, garantizando la estabilidad, disponibilidad y aislamiento del resto del sistema.
-
-### Comportamiento actual del sistema ante una excepción en una tarea
-
-Cuando una tarea que corre en espacio de usuario (**Ring 3**, `CPL = 3`) dispara una excepción (por ejemplo, división por cero `#DE`, fallo de protección general `#GP`, o un fallo de página `#PF` sobre una dirección no asignada ni bajo demanda):
-
-1. **Intervención del hardware de la CPU:**
-   - La CPU detecta la excepción y consulta la compuerta correspondiente en la IDT (vectores 0 a 19).
-   - Como la compuerta apunta a un descriptor de segmento de código de Ring 0 (`GDT_CODE_0_SEL`), se produce una transición de privilegio de Ring 3 a Ring 0 (`CPL = 0`).
-   - El procesador consulta el registro de tarea `TR` y extrae de la TSS los campos `ss0` (`GDT_DATA_0_SEL`) y `esp0` (`KERNEL_STACK = 0x25000`).
-   - Conmuta a la pila del kernel y apila automáticamente el contexto de Ring 3 que permite el retorno:
-     `SS (usuario)`, `ESP (usuario)`, `EFLAGS`, `CS (usuario, RPL = 3)`, `EIP (instrucción causante)` y, si corresponde según la excepción, el `Error Code`.
-2. **Ejecución del manejador en `src/isr.asm` (`ISRc` / `_isr14`):**
-   - La macro `ISRc` apila el número de interrupción, los registros de propósito general (`pushad`), los selectores de segmento (`SS, GS, FS, ES, DS, CS`) y los registros de control (`CR4, CR3, CR2, CR0`).
-   - Se comprueba el nivel de privilegio de origen leyendo el `CS` apilado:
-     ```nasm
-     mov edx, [esp + (8*4 + 3*4)]  ; lee el CS guardado en el frame
-     cmp edx, CS_RING_0_SEL
-     je .ring0_exception
-     ```
-   - Si `edx != CS_RING_0_SEL`, el código detecta que la excepción fue provocada por una tarea en Ring 3. Sin embargo, en la implementación actual el bloque ejecuta:
-     ```nasm
-     call kernel_exception
-     add esp, 10*4
-     popad
-     xchg bx, bx
-     jmp $
-     ```
-   - En el caso particular de `_isr14` (Page Fault): se invoca `page_fault_handler(cr2)`. Si la dirección lineal no pertenece al rango de memoria bajo demanda (`[0x07000000, 0x07000FFF]`), el manejador retorna `false` (`0`), provocando igualmente la llamada a `kernel_exception` seguida de `jmp $`.
+   - En el caso particular de `_isr14` (Page Fault): se invoca `page_fault_handler(cr2)`. Si la dirección lineal no pertenece al rango de memoria bajo demanda (`[0x07000000, 0x07000FFF]`), el manejador retorna `false`, provocando igualmente la llamada a `kernel_exception` seguida de `jmp $`.
 3. **Efecto final sobre el sistema:**
    - `kernel_exception` dibuja en la pantalla la plantilla de excepción (*pantalla de la muerte* con el volcado completo de registros y tope de pila).
    - Inmediatamente el procesador se traba en un bucle infinito `jmp $` con un breakpoint mágico de Bochs (`xchg bx, bx`).
-   - **Consecuencia:** El fallo de una sola tarea de usuario detiene y bloquea por completo todo el sistema operativo. El kernel entra en pánico y congela todas las demás tareas concurrentes sanas (por ejemplo Pong, Scoreboard e Idle), eliminando el aislamiento de fallas que debería brindar la arquitectura en modo protegido.
+   - **Consecuencia:** El fallo de una sola tarea de usuario detiene y bloquea por completo todo el sistema operativo. El kernel entra en pánico y congela todas las demás tareas concurrentes, eliminando el aislamiento de fallas que debería brindar la arquitectura en modo protegido.
 
 ### ¿Cómo podría mejorarse la respuesta del sistema?
 
@@ -684,23 +599,19 @@ En un sistema operativo robusto y multitarea, el fallo de una tarea de usuario n
 #### 1. Terminación Aislada de la Tarea Afectada (*Task Killing*)
 En lugar de invocar `kernel_exception` y ejecutar `jmp $` al detectar que `CS != CS_RING_0_SEL`:
 - **Identificar la tarea culpable:** A través de la variable global `current_task` del planificador.
-- **Deshabilitar la tarea en el scheduler:**
-  ```c
-  sched_disable_task(current_task); // tasks[current_task].sched_state = TASK_PAUSED (o TASK_DEAD)
-  ```
+- **Deshabilitar la tarea en el scheduler:** `sched_disable_task(current_task);`
 - **Liberar los recursos de la tarea:**
-  - Liberar la página física de la pila de usuario (`0x08003000`) en el administrador de memoria física (`mmu_free_user_page`).
-  - Liberar las páginas dinámicas que haya solicitado (por ejemplo, la página bajo demanda si fue mapeada).
-  - Liberar las tablas de páginas y el directorio de páginas asignado a la tarea (`CR3`), limpiando las entradas privadas de usuario.
-- **Registrar y notificar el evento:**
-  - En lugar de sobrescribir toda la pantalla, imprimir un mensaje de error no invasivo en una consola de logs del kernel o marcar la tarea como *"Muerta / Crash"* en el Scoreboard o interfaz gráfica.
+    - Liberar la página física de la pila de usuario (`0x08003000`) en el administrador de memoria física (`mmu_free_user_page`).
+    - Liberar las páginas dinámicas que haya solicitado (por ejemplo, la página bajo demanda si fue mapeada).
+    - Liberar las tablas de páginas y el directorio de páginas asignado a la tarea (`CR3`), limpiando las entradas privadas de usuario.
+- **Registrar y notificar el evento:** En lugar de sobrescribir toda la pantalla, imprimir un mensaje de error en una consola de logs del kernel o marcar la tarea como *"Muerta/Crash"* en el Scoreboard o interfaz gráfica.
 - **Continuar con la ejecución del sistema:**
-  - Descartar el stack frame de la excepción en la pila de kernel (o resetear `ESP = KERNEL_STACK`).
-  - Invocar a `sched_next_task()` para seleccionar la siguiente tarea viva (`TASK_RUNNABLE`). Si no hay tareas vivas, se seleccionará la tarea `Idle`.
-  - Saltar inmediatamente a la nueva tarea mediante `switch_to_usermode(current_task)` o restaurar su contexto vía `iret`.
-  - **Resultado:** Las demás tareas siguen corriendo con total normalidad y el sistema se mantiene operativo y receptivo.
+    - Descartar el stack frame de la excepción en la pila de kernel (o resetear `ESP = KERNEL_STACK`).
+    - Invocar a `sched_next_task()` para seleccionar la siguiente tarea viva (`TASK_RUNNABLE`). Si no hay tareas vivas, se seleccionará la tarea `Idle`.
+    - Saltar inmediatamente a la nueva tarea mediante `switch_to_usermode(current_task)` o restaurar su contexto vía `iret`.
+- **Resultado:** Las demás tareas siguen corriendo con total normalidad y el sistema se mantiene operativo y receptivo.
 
-#### 2. Reinicio Automático de la Tarea (*Task Recovery / Restart*)
+#### 2. Reinicio Automático de la Tarea (*Task Recovery*)
 Si la tarea es un servicio persistente o de demostración (como el juego Pong):
 - En lugar de eliminarla permanentemente, el kernel puede reiniciar su estado de ejecución:
   - Restaurar en `tasks[current_task]` su contexto inicial:
@@ -711,15 +622,6 @@ Si la tarea es un servicio persistente o de demostración (como el juego Pong):
   - Si la tarea corrompió su espacio de datos, se puede reinstanciar su directorio de páginas o recargar su código/datos.
   - La tarea vuelve a ponerse en `TASK_RUNNABLE` y el scheduler la reanuda desde el principio.
 
-#### 3. Mecanismo de Señales a Nivel de Usuario (*User-Space Exception Handling / Signals*)
-Al estilo de los sistemas POSIX (`SIGSEGV` para `#PF`/`#GP`, `SIGFPE` para `#DE`, `SIGILL` para `#UD`):
-- Permitir que una tarea de usuario registre un manejador de excepciones personalizado mediante una syscall.
-- Si la tarea sufre una excepción y tiene un manejador configurado:
-  - El kernel construye un frame especial en la pila de usuario de la tarea con los registros al momento del fallo.
-  - El kernel modifica el `EIP` de retorno en el frame de `iret` para que apunte a dicho manejador en Ring 3.
-  - La tarea recibe el control en espacio de usuario y tiene la oportunidad de manejar el error, salvar estado o abortar de manera ordenada.
-  - Si no tiene manejador registrado o el propio manejador falla, el kernel procede a terminar la tarea (estrategia 1).
-
-#### 4. Distinción Estricta entre Excepciones de Kernel (Ring 0) y de Usuario (Ring 3)
+#### 3. Distinción Estricta entre Excepciones de Kernel (Ring 0) y de Usuario (Ring 3)
 - **Ring 0 (`CS == CS_RING_0_SEL`):** El kernel debe entrar en pánico (`kernel_exception` + `jmp $`), ya que un fallo en modo supervisor indica corrupción crítica de estructuras internas del sistema operativo de las cuales no es seguro recuperarse automáticamente.
 - **Ring 3 (`CS != CS_RING_0_SEL`):** Solo debe afectar a la tarea que cometió la infracción, garantizando la estabilidad, disponibilidad y aislamiento del resto del sistema.

@@ -7,7 +7,6 @@
 */
 
 #include "sched.h"
-
 #include "i386.h"
 #include "kassert.h"
 
@@ -40,7 +39,7 @@ uint32_t sched_next_task(void) {
     // Buscamos la próxima tarea viva (comenzando en la actual)
     int8_t i;
 
-    for (i = (current_task + 1); (i % MAX_TASKS) != current_task; i++) {
+    for (i = current_task + 1; i % MAX_TASKS != current_task; i++) {
         // Si esta tarea está disponible la ejecutamos
         if (tasks[i % MAX_TASKS].sched_state == TASK_RUNNABLE) {
             break;
@@ -59,7 +58,6 @@ uint32_t sched_next_task(void) {
     // En el peor de los casos no hay ninguna tarea viva. Usemos la idle.
     return 0;
 }
-
 
 void sched_init(void) {
     current_task = 0;
